@@ -77,6 +77,17 @@
                 <button id="replayButton">Play Again</button>
             </div>
         </div>
+        <div id="gameOverScreen" style="display: none">
+            <img
+                id="landingImage"
+                src=""
+                alt="Landing Image"
+                style="display: none; max-width: 80%; max-height: 40%"
+            />
+            <h2 id="gameOverText">Game Over</h2>
+            <p>Score: <span id="finalScore"></span></p>
+            <button id="replayButton">Play Again</button>
+        </div>
 
         <script>
             const canvas = document.getElementById("gameCanvas");
@@ -471,10 +482,15 @@
             // ゲーム終了処理
             function endGame(isVictory) {
                 gameState.gameOver = true;
+                const landingImage = document.getElementById("landingImage");
                 if (isVictory) {
                     gameOverText.textContent = "Mission Complete!";
+                    const imageNumber = Math.floor(Math.random() * 3) + 1;
+                    landingImage.src = `https://koriym.github.io/html-play/images/ufo/landing${imageNumber}.jpg`;
+                    landingImage.style.display = "block";
                 } else {
                     gameOverText.textContent = "Game Over";
+                    landingImage.style.display = "none";
                 }
                 finalScore.textContent = Math.floor(gameState.timer / 60);
                 gameOverScreen.style.display = "flex";
