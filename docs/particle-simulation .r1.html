@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Particle Simulation</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            display: none;
+        }
+        .control-group {
+            margin-bottom: 10px;
+        }
+        #hideLink {
+            color: white;
+            text-decoration: none;
+            position: absolute;
+            top: 10px;
+            right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <div class="control-group">
+            <label for="speedSlider">Speed: </label>
+            <input type="range" id="speedSlider" min="0" max="1" step="0.01" value="0.30">
+            <span id="speedValue">0.30</span>
+        </div>
+        <div class="control-group">
+            <label for="cameraSlider">Camera Distance: </label>
+            <input type="range" id="cameraSlider" min="100" max="2000" step="10" value="500">
+            <span id="cameraValue">500</span>
+        </div>
+        <div class="control-group">
+            <label for="particleSlider">Particle Count: </label>
+            <input type="range" id="particleSlider" min="100" max="5000" step="100" value="1000">
+            <span id="particleValue">1000</span>
+        </div>
+        <div class="control-group">
+            <label>Camera Mode: </label>
+            <input type="radio" id="staticMode" name="cameraMode" value="static" checked>
+            <label for="staticMode">Static</label>
+            <input type="radio" id="centerMode" name="cameraMode" value="center">
+            <label for="centerMode">Center</label>
+        </div>
+        <div class="control-group">
+            <label for="meshToggle">Show Mesh: </label>
+            <input type="checkbox" id="meshToggle">
+        </div>
+        <a href="#" id="hideLink">Hide</a>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Scene, camera, and renderer setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 3000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Variables
+        let speedScale = 0.30;
+        let cameraDistance = 500;
+        let cameraMode = 'static';
+        let particleCount = 1000;
+        let meshVisible = false;
+
+        // Distribution range
+        const distributionRange = 800;
+
+        // Particle system
+        let particles;
+        function createParticles() {
+            if (particles) {
+                scene.remove(particles);
+            }
+
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            const colors = new Float32Array(particleCount * 3);
+            velocities = [];
+
+            for (let i = 0; i < particleCount; i++) {
+                positions[i * 3] = Math.random() * distributionRange - distributionRange / 2;
+                positions[i * 3 + 1] = Math.random() * distributionRange - distributionRange / 2;
+                positions[i * 3 + 2] = Math.random() * distributionRange - distributionRange / 2;
+
+                colors[i * 3] = Math.random();
+                colors[i * 3 + 1] = Math.random();
+                colors[i * 3 + 2] = Math.random();
+
+                velocities.push(new THREE.Vector3(
+                    Math.random() * 2 - 1,
+                    Math.random() * 2 - 1,
+                    Math.random() * 2 - 1
+                ));
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+            const material = new THREE.PointsMaterial({
+                size: 3,
+                vertexColors: true
+            });
+
+            particles = new THREE.Points(geometry, material);
+            scene.add(particles);
+        }
+
+        createParticles();
+
+        // Grid
+        const gridHelpers = [];
+        function createGrid() {
+            const gridHelper1 = new THREE.GridHelper(distributionRange, 10, 0x888888, 0x444444);
+            const gridHelper2 = new THREE.GridHelper(distributionRange, 10, 0x888888, 0x444444);
+            gridHelper2.rotation.x = Math.PI / 2;
+            const gridHelper3 = new THREE.GridHelper(distributionRange, 10, 0x888888, 0x444444);
+            gridHelper3.rotation.z = Math.PI / 2;
+            
+            gridHelpers.push(gridHelper1, gridHelper2, gridHelper3);
+            gridHelpers.forEach(helper => {
+                scene.add(helper);
+                helper.visible = meshVisible;
+            });
+        }
+
+        createGrid();
+
+        // Axes helper
+        const axesHelper = new THREE.AxesHelper(distributionRange / 2);
+        scene.add(axesHelper);
+        axesHelper.visible = meshVisible;
+
+        // Camera initial position
+        camera.position.z = cameraDistance;
+
+        // Camera position and velocity
+        const cameraPosition = new THREE.Vector3(0, 0, cameraDistance);
+        const cameraVelocity = new THREE.Vector3();
+
+        // Update camera position
+        function updateCameraPosition() {
+            if (cameraMode === 'static') {
+                camera.position.set(0, 0, cameraDistance);
+                camera.lookAt(0, 0, 0);
+            } else if (cameraMode === 'center') {
+                const direction = new THREE.Vector3().subVectors(new THREE.Vector3(), cameraPosition).normalize();
+                cameraVelocity.add(direction.multiplyScalar(0.01 * speedScale));
+                cameraPosition.add(cameraVelocity.clone().multiplyScalar(speedScale));
+                camera.position.copy(cameraPosition);
+                camera.lookAt(0, 0, 0);
+            }
+        }
+
+        // Animation function
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const positions = particles.geometry.attributes.position.array;
+
+            for (let i = 0; i < particleCount; i++) {
+                const i3 = i * 3;
+                const velocity = velocities[i];
+
+                const direction = new THREE.Vector3(
+                    -positions[i3],
+                    -positions[i3 + 1],
+                    -positions[i3 + 2]
+                ).normalize();
+
+                velocity.add(direction.multiplyScalar(0.01 * speedScale));
+
+                positions[i3] += velocity.x * speedScale;
+                positions[i3 + 1] += velocity.y * speedScale;
+                positions[i3 + 2] += velocity.z * speedScale;
+            }
+
+            particles.geometry.attributes.position.needsUpdate = true;
+
+            updateCameraPosition();
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // UI Controls
+        const controls = document.getElementById('controls');
+        const speedSlider = document.getElementById('speedSlider');
+        const speedValue = document.getElementById('speedValue');
+        const cameraSlider = document.getElementById('cameraSlider');
+        const cameraValue = document.getElementById('cameraValue');
+        const particleSlider = document.getElementById('particleSlider');
+        const particleValue = document.getElementById('particleValue');
+        const cameraModeInputs = document.querySelectorAll('input[name="cameraMode"]');
+        const meshToggle = document.getElementById('meshToggle');
+        const hideLink = document.getElementById('hideLink');
+
+        speedSlider.addEventListener('input', function() {
+            speedScale = parseFloat(this.value);
+            speedValue.textContent = speedScale.toFixed(2);
+        });
+
+        cameraSlider.addEventListener('input', function() {
+            cameraDistance = parseFloat(this.value);
+            cameraValue.textContent = cameraDistance.toFixed(0);
+            if (cameraMode === 'static') {
+                camera.position.setLength(cameraDistance);
+            }
+        });
+
+        particleSlider.addEventListener('input', function() {
+            particleCount = parseInt(this.value);
+            particleValue.textContent = particleCount.toString();
+            createParticles();
+        });
+
+        cameraModeInputs.forEach(input => {
+            input.addEventListener('change', function() {
+                cameraMode = this.value;
+                if (cameraMode === 'static') {
+                    camera.position.set(0, 0, cameraDistance);
+                    cameraVelocity.set(0, 0, 0);
+                } else {
+                    cameraPosition.copy(camera.position);
+                    cameraVelocity.set(
+                        Math.random() * 2 - 1,
+                        Math.random() * 2 - 1,
+                        Math.random() * 2 - 1
+                    ).normalize().multiplyScalar(speedScale);
+                }
+            });
+        });
+
+        meshToggle.addEventListener('change', function() {
+            meshVisible = this.checked;
+            gridHelpers.forEach(helper => helper.visible = meshVisible);
+            axesHelper.visible = meshVisible;
+        });
+
+        hideLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            controls.style.display = 'none';
+        });
+
+        // Show controls on click/touch
+        document.addEventListener('click', function(e) {
+            if (e.target !== hideLink && !controls.contains(e.target)) {
+                controls.style.display = 'block';
+            }
+        });
+
+        // Window resize handler
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

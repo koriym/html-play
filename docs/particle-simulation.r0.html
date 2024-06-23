@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="ja">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>@3D粒子シミュレーション</title>
+        <style>
+            body {
+                margin: 0;
+            }
+            canvas {
+                display: block;
+            }
+        </style>
+    </head>
+    <body>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+        <script>
+            // シーン、カメラ、レンダラーの設定
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(
+                75,
+                window.innerWidth / window.innerHeight,
+                0.1,
+                1000,
+            );
+            const renderer = new THREE.WebGLRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            // 粒子の数と中心点の設定
+            const particleCount = 1500;
+            const centerPoint = new THREE.Vector3(0, 0, 0);
+
+            // 粒子のジオメトリとマテリアルの作成
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            const colors = new Float32Array(particleCount * 3);
+            const velocities = [];
+
+            for (let i = 0; i < particleCount; i++) {
+                // ランダムな位置
+                positions[i * 3] = Math.random() * 200 - 100;
+                positions[i * 3 + 1] = Math.random() * 200 - 100;
+                positions[i * 3 + 2] = Math.random() * 200 - 100;
+
+                // ランダムな色
+                colors[i * 3] = Math.random();
+                colors[i * 3 + 1] = Math.random();
+                colors[i * 3 + 2] = Math.random();
+
+                // ランダムな初速度
+                velocities.push(
+                    new THREE.Vector3(
+                        Math.random() * 2 - 1,
+                        Math.random() * 2 - 1,
+                        Math.random() * 2 - 1,
+                    ),
+                );
+            }
+
+            geometry.setAttribute(
+                "position",
+                new THREE.BufferAttribute(positions, 3),
+            );
+            geometry.setAttribute(
+                "color",
+                new THREE.BufferAttribute(colors, 3),
+            );
+
+            const material = new THREE.PointsMaterial({
+                size: 0.5,
+                vertexColors: true,
+            });
+
+            const particles = new THREE.Points(geometry, material);
+            scene.add(particles);
+
+            camera.position.z = 100;
+
+            // アニメーション関数
+            function animate() {
+                requestAnimationFrame(animate);
+
+                const positions = particles.geometry.attributes.position.array;
+
+                for (let i = 0; i < particleCount; i++) {
+                    const i3 = i * 3;
+                    const velocity = velocities[i];
+
+                    // 中心点への方向ベクトルを計算
+                    const direction = new THREE.Vector3(
+                        centerPoint.x - positions[i3],
+                        centerPoint.y - positions[i3 + 1],
+                        centerPoint.z - positions[i3 + 2],
+                    ).normalize();
+
+                    // 加速度を適用
+                    velocity.add(direction.multiplyScalar(0.01));
+
+                    // 速度を位置に適用
+                    positions[i3] += velocity.x;
+                    positions[i3 + 1] += velocity.y;
+                    positions[i3 + 2] += velocity.z;
+                }
+
+                particles.geometry.attributes.position.needsUpdate = true;
+
+                renderer.render(scene, camera);
+            }
+
+            animate();
+
+            // ウィンドウのリサイズに対応
+            window.addEventListener("resize", () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        </script>
+    </body>
+</html>
