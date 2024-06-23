@@ -485,7 +485,7 @@
                 const landingImage = document.getElementById("landingImage");
                 if (isVictory) {
                     gameOverText.textContent = "Mission Complete!";
-                    const imageNumber = Math.floor(Math.random() * 3) + 1;
+                    const imageNumber = Math.floor(Math.random() * 4) + 1;
                     landingImage.src = `https://koriym.github.io/html-play/images/ufo/landing${imageNumber}.jpg`;
                     landingImage.style.display = "block";
                 } else {
