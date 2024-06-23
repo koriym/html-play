@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="ja">
+    <head>
+        <meta charset="UTF-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+        />
+        <title>Space Adventure</title>
+        <style>
+            body {
+                margin: 0;
+                padding: 0;
+                background-color: #000;
+                font-family: Arial, sans-serif;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+                touch-action: none;
+            }
+            #gameContainer {
+                position: relative;
+                width: 100%;
+                height: 100%;
+                max-width: 600px;
+                max-height: 800px;
+            }
+            canvas {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+            }
+            #startScreen,
+            #gameOverScreen {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                color: white;
+                text-align: center;
+                font-size: 18px;
+                background-color: rgba(0, 0, 0, 0.7);
+            }
+            button {
+                font-size: 20px;
+                padding: 10px 20px;
+                margin-top: 20px;
+                cursor: pointer;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="gameContainer">
+            <canvas id="gameCanvas"></canvas>
+            <div id="startScreen">
+                <h1>Space Adventure</h1>
+                <p>
+                    操作方法：<br />
+                    画面をタッチしている間は右に移動<br />
+                    離すと左に移動<br />
+                    端に到達すると反対側から現れます<br />
+                    障害物を避けながら60秒間飛び続けよう！
+                </p>
+                <button id="startButton">Start Game</button>
+            </div>
+            <div id="gameOverScreen" style="display: none">
+                <h2 id="gameOverText">Game Over</h2>
+                <p>Score: <span id="finalScore"></span></p>
+                <button id="replayButton">Play Again</button>
+            </div>
+        </div>
+
+        <script>
+            const canvas = document.getElementById("gameCanvas");
+            const ctx = canvas.getContext("2d");
+            const startScreen = document.getElementById("startScreen");
+            const startButton = document.getElementById("startButton");
+            const gameOverScreen = document.getElementById("gameOverScreen");
+            const replayButton = document.getElementById("replayButton");
+            const gameOverText = document.getElementById("gameOverText");
+            const finalScore = document.getElementById("finalScore");
+            const gameContainer = document.getElementById("gameContainer");
+
+            let canvasWidth = 400;
+            let canvasHeight = 600;
+
+            function resizeCanvas() {
+                const containerWidth = gameContainer.clientWidth;
+                const containerHeight = gameContainer.clientHeight;
+                const scale = Math.min(
+                    containerWidth / canvasWidth,
+                    containerHeight / canvasHeight,
+                );
+
+                canvas.width = canvasWidth * scale;
+                canvas.height = canvasHeight * scale;
+                ctx.scale(scale, scale);
+            }
+
+            window.addEventListener("resize", resizeCanvas);
+            resizeCanvas();
+
+            // ゲーム状態
+            let gameState = {
+                ufo: { x: 200, y: 50, vx: 0, width: 40, height: 20 },
+                obstacles: [],
+                stars: [],
+                comets: [],
+                timer: 0,
+                gameOver: false,
+                touching: false,
+                landingSequence: false,
+                planet: { y: canvasHeight, height: 200 },
+                devMode: false,
+                volcanoes: [],
+                cometDelay: 180,
+            };
+
+            // ゲーム状態のリセット
+            function resetGameState(devMode = false) {
+                gameState = {
+                    ufo: { x: 200, y: 50, vx: 0, width: 40, height: 20 },
+                    obstacles: [],
+                    stars: [],
+                    comets: [],
+                    timer: 0,
+                    gameOver: false,
+                    touching: false,
+                    landingSequence: false,
+                    planet: { y: canvasHeight, height: 200 },
+                    devMode: devMode,
+                    volcanoes: [],
+                    cometDelay: 180,
+                };
+                // 初期の星を生成
+                for (let i = 0; i < 50; i++) {
+                    gameState.stars.push(createStar());
+                }
+            }
+
+            // UFOの描画
+            function drawUFO() {
+                ctx.fillStyle = "#ff69b4";
+                ctx.beginPath();
+                ctx.ellipse(
+                    gameState.ufo.x,
+                    gameState.ufo.y,
+                    gameState.ufo.width / 2,
+                    gameState.ufo.height / 2,
+                    0,
+                    0,
+                    Math.PI * 2,
+                );
+                ctx.fill();
+
+                ctx.fillStyle = "#87cefa";
+                ctx.beginPath();
+                ctx.ellipse(
+                    gameState.ufo.x,
+                    gameState.ufo.y - 5,
+                    gameState.ufo.width / 4,
+                    gameState.ufo.height / 3,
+                    0,
+                    0,
+                    Math.PI * 2,
+                );
+                ctx.fill();
+
+                ctx.fillStyle = "#000";
+                ctx.beginPath();
+                ctx.arc(
+                    gameState.ufo.x - 8,
+                    gameState.ufo.y - 5,
+                    2,
+                    0,
+                    Math.PI * 2,
+                );
+                ctx.arc(
+                    gameState.ufo.x + 8,
+                    gameState.ufo.y - 5,
+                    2,
+                    0,
+                    Math.PI * 2,
+                );
+                ctx.fill();
+
+                ctx.strokeStyle = "#000";
+                ctx.beginPath();
+                ctx.arc(
+                    gameState.ufo.x,
+                    gameState.ufo.y - 2,
+                    5,
+                    0.1 * Math.PI,
+                    0.9 * Math.PI,
+                );
+                ctx.stroke();
+            }
+
+            // 障害物の生成
+            function createObstacle() {
+                const types = ["🛰️", "🪐", "🌠"];
+                const type = types[Math.floor(Math.random() * types.length)];
+                return {
+                    x: Math.random() * canvasWidth,
+                    y: canvasHeight + 20,
+                    type: type,
+                    size: 40,
+                    vy: -2,
+                };
+            }
+
+            // 彗星の生成
+            function createComet() {
+                return {
+                    x: Math.random() * canvasWidth,
+                    y: -20,
+                    type: "☄️",
+                    size: 40,
+                    vx: 1,
+                    vy: 2,
+                };
+            }
+
+            // 火山の生成
+            function createVolcano() {
+                return {
+                    x: Math.random() * canvasWidth,
+                    y:
+                        Math.random() * (gameState.planet.height / 2) +
+                        gameState.planet.y,
+                    type: "🌋",
+                    size: 40,
+                };
+            }
+
+            // 障害物の描画
+            function drawObstacle(obstacle) {
+                ctx.font = `${obstacle.size}px Arial`;
+                ctx.fillText(
+                    obstacle.type,
+                    obstacle.x - obstacle.size / 2,
+                    obstacle.y + obstacle.size / 2,
+                );
+            }
+
+            // 星の生成と描画
+            function createStar() {
+                return {
+                    x: Math.random() * canvasWidth,
+                    y: Math.random() * canvasHeight,
+                    size: Math.random() * 2 + 1,
+                    speed: Math.random() * 0.5 + 0.1,
+                };
+            }
+
+            function drawStar(star) {
+                ctx.fillStyle = "#fff";
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // 惑星の描画
+            function drawPlanet() {
+                ctx.fillStyle = "#8B4513";
+                ctx.beginPath();
+                ctx.ellipse(
+                    canvasWidth / 2,
+                    gameState.planet.y + gameState.planet.height / 2,
+                    canvasWidth / 2,
+                    gameState.planet.height / 2,
+                    0,
+                    0,
+                    Math.PI * 2,
+                );
+                ctx.fill();
+
+                const colors = ["#A0522D", "#CD853F", "#DEB887", "#D2691E"];
+                for (let i = 0; i < 20; i++) {
+                    ctx.fillStyle =
+                        colors[Math.floor(Math.random() * colors.length)];
+                    let x = Math.random() * canvasWidth;
+                    let y =
+                        gameState.planet.y +
+                        Math.random() * (gameState.planet.height / 2);
+                    let size = Math.random() * 40 + 10;
+                    ctx.beginPath();
+                    ctx.arc(x, y, size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            // ゲームの更新
+            function update() {
+                if (gameState.gameOver) return;
+
+                if (gameState.landingSequence) {
+                    updateLandingSequence();
+                } else {
+                    updateNormalGame();
+                }
+
+                // 星の更新（常に行う）
+                gameState.stars.forEach((star) => {
+                    star.y -= star.speed;
+                    if (star.y < 0) {
+                        star.y = canvasHeight;
+                        star.x = Math.random() * canvasWidth;
+                    }
+                });
+
+                gameState.timer++;
+                if (
+                    (gameState.devMode && gameState.timer >= 900) ||
+                    (!gameState.devMode && gameState.timer >= 3600)
+                ) {
+                    if (!gameState.landingSequence) {
+                        startLandingSequence();
+                    }
+                }
+            }
+
+            function updateNormalGame() {
+                if (gameState.touching) {
+                    gameState.ufo.vx = 1.5;
+                } else {
+                    gameState.ufo.vx = -1.5;
+                }
+                gameState.ufo.x += gameState.ufo.vx;
+
+                if (gameState.ufo.x < -gameState.ufo.width / 2) {
+                    gameState.ufo.x = canvasWidth + gameState.ufo.width / 2;
+                } else if (
+                    gameState.ufo.x >
+                    canvasWidth + gameState.ufo.width / 2
+                ) {
+                    gameState.ufo.x = -gameState.ufo.width / 2;
+                }
+
+                gameState.obstacles.forEach((obs) => (obs.y += obs.vy));
+                gameState.obstacles = gameState.obstacles.filter(
+                    (obs) => obs.y > -40,
+                );
+
+                if (Math.random() < 0.02)
+                    gameState.obstacles.push(createObstacle());
+
+                gameState.obstacles.forEach((obs) => {
+                    if (checkCollision(gameState.ufo, obs)) {
+                        endGame(false);
+                    }
+                });
+            }
+
+            function startLandingSequence() {
+                gameState.landingSequence = true;
+                gameState.obstacles = [];
+                for (let i = 0; i < 3; i++) {
+                    gameState.obstacles.push(createObstacle());
+                }
+                for (let i = 0; i < 2; i++) {
+                    gameState.volcanoes.push(createVolcano());
+                }
+            }
+
+            function updateLandingSequence() {
+                if (gameState.planet.y > (canvasHeight * 2) / 3) {
+                    gameState.planet.y -= 1;
+                    gameState.volcanoes.forEach((volcano) => {
+                        volcano.y -= 1;
+                    });
+                }
+
+                if (gameState.ufo.y < (canvasHeight * 3) / 4) {
+                    gameState.ufo.y += 0.5;
+                } else {
+                    endGame(true);
+                }
+
+                if (gameState.touching) {
+                    gameState.ufo.vx = 1.5;
+                } else {
+                    gameState.ufo.vx = -1.5;
+                }
+                gameState.ufo.x += gameState.ufo.vx;
+
+                if (gameState.ufo.x < -gameState.ufo.width / 2) {
+                    gameState.ufo.x = canvasWidth + gameState.ufo.width / 2;
+                } else if (
+                    gameState.ufo.x >
+                    canvasWidth + gameState.ufo.width / 2
+                ) {
+                    gameState.ufo.x = -gameState.ufo.width / 2;
+                }
+
+                // 彗星の生成と更新
+                if (gameState.cometDelay > 0) {
+                    gameState.cometDelay--;
+                } else if (
+                    Math.random() < 0.03 &&
+                    gameState.comets.length < 3
+                ) {
+                    gameState.comets.push(createComet());
+                }
+
+                gameState.comets.forEach((comet) => {
+                    comet.x += comet.vx;
+                    comet.y += comet.vy;
+                    if (checkCollision(gameState.ufo, comet)) {
+                        endGame(false);
+                    }
+                });
+                gameState.comets = gameState.comets.filter(
+                    (comet) => comet.y < canvasHeight && comet.x < canvasWidth,
+                );
+
+                gameState.obstacles.forEach((obs) => {
+                    obs.y -= 1;
+                    if (checkCollision(gameState.ufo, obs)) {
+                        endGame(false);
+                    }
+                });
+
+                gameState.volcanoes.forEach((volcano) => {
+                    if (checkCollision(gameState.ufo, volcano)) {
+                        endGame(false);
+                    }
+                });
+            }
+
+            function checkCollision(ufo, object) {
+                const dx = ufo.x - object.x;
+                const dy = ufo.y - object.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                return distance < ufo.width / 2 + object.size / 2 - 5;
+            }
+
+            // 描画
+            function draw() {
+                ctx.fillStyle = "#000";
+                ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+                gameState.stars.forEach(drawStar);
+
+                if (gameState.landingSequence) {
+                    drawPlanet();
+                    gameState.volcanoes.forEach(drawObstacle);
+                    gameState.comets.forEach(drawObstacle);
+                }
+
+                gameState.obstacles.forEach(drawObstacle);
+                drawUFO();
+
+                ctx.fillStyle = "#fff";
+                ctx.font = "20px Arial";
+                ctx.fillText(
+                    `Time: ${Math.floor(gameState.timer / 60)}`,
+                    10,
+                    30,
+                );
+            }
+
+            // ゲーム終了処理
+            function endGame(isVictory) {
+                gameState.gameOver = true;
+                if (isVictory) {
+                    gameOverText.textContent = "Mission Complete!";
+                } else {
+                    gameOverText.textContent = "Game Over";
+                }
+                finalScore.textContent = Math.floor(gameState.timer / 60);
+                gameOverScreen.style.display = "flex";
+            }
+
+            // ゲームループ
+            function gameLoop() {
+                update();
+                draw();
+                if (!gameState.gameOver) {
+                    requestAnimationFrame(gameLoop);
+                }
+            }
+
+            // タッチイベントの処理
+            canvas.addEventListener("touchstart", (e) => {
+                e.preventDefault();
+                gameState.touching = true;
+            });
+
+            canvas.addEventListener("touchend", (e) => {
+                e.preventDefault();
+                gameState.touching = false;
+            });
+
+            // マウスイベントの処理（デスクトップ互換性のため）
+            canvas.addEventListener("mousedown", (e) => {
+                gameState.touching = true;
+            });
+
+            canvas.addEventListener("mouseup", (e) => {
+                gameState.touching = false;
+            });
+
+            // キーボードイベントの処理（デスクトップ互換性のため）
+            document.addEventListener("keydown", (e) => {
+                if (e.code === "Space") {
+                    gameState.touching = true;
+                } else if (e.code === "KeyD") {
+                    gameState.devMode = true;
+                }
+            });
+
+            document.addEventListener("keyup", (e) => {
+                if (e.code === "Space") {
+                    gameState.touching = false;
+                }
+            });
+
+            // ゲーム開始
+            function startGame(devMode = false) {
+                resetGameState(devMode);
+                startScreen.style.display = "none";
+                gameOverScreen.style.display = "none";
+                gameLoop();
+            }
+
+            startButton.addEventListener("click", () => startGame());
+            replayButton.addEventListener("click", () => startGame());
+
+            // 初期リサイズ
+            resizeCanvas();
+        </script>
+    </body>
+</html>
