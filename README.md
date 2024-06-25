@@ -1,5 +1,6 @@
 # html-play
-HTML playground - [Claude 3.5 Sonnet Artifacts](https://www.anthropic.com/news/claude-3-5-sonnet)
+
+Programmes created with [Claude 3.5 Sonnet Artifacts](https://www.anthropic.com/news/claude-3-5-sonnet)
 
 - [Particles](https://koriym.github.io/html-play/particles.html) -   Particle simulator. Made in memory of my first Sony PlayStation (PS1) programming demo, a 3D version of Xevious's "Gemini Induction". Click (touch) to operate the slider.
 
