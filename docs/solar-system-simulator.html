@@ -75,7 +75,7 @@
             scene.add(solarSystem);
 
             const planetData = [
-                { name: "Sun", radius: 3, distance: 0, color: 0xffff00, hasGravity: true },
+                { name: "Sun", radius: 2, distance: 0, color: 0x880000, hasGravity: true },
                 { name: "Mercury", radius: Math.max(0.383, MIN_PLANET_SIZE), distance: 5.79, color: 0x8c7853, hasGravity: true },
                 { name: "Venus", radius: Math.max(0.949, MIN_PLANET_SIZE), distance: 10.82, color: 0xffd700, hasGravity: true },
                 { name: "Earth", radius: EARTH_RADIUS, distance: 14.96, color: 0x0077be, hasGravity: true },
@@ -115,14 +115,14 @@
             context.font = 'Bold 20px Arial';
             context.fillStyle = 'white';
             context.fillText(text, 0, 20);
-            
+
             const texture = new THREE.Texture(canvas);
             texture.needsUpdate = true;
-            
+
             const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
             const sprite = new THREE.Sprite(spriteMaterial);
             sprite.scale.set(2, 1, 1);
-            
+
             return sprite;
         }
 
@@ -139,25 +139,25 @@
             const geometry = new THREE.SphereGeometry(0.2, 8, 8);
             const material = new THREE.MeshBasicMaterial({ color: 0x8B4513, transparent: true });
             const asteroid = new THREE.Mesh(geometry, material);
-            
+
             const angle = Math.random() * Math.PI * 2;
             const distance = 100 + Math.random() * 50;
             asteroid.position.set(
                 Math.cos(angle) * distance,
-                (Math.random() - 0.5) * 20,
+                (Math.random() - 0.5) * 60,
                 Math.sin(angle) * distance
             );
 
             const earthPosition = planets[3].position;
             const direction = new THREE.Vector3().subVectors(earthPosition, asteroid.position).normalize();
             asteroid.userData.velocity = direction.multiplyScalar(ASTEROID_SPEED);
-            
+
             const lineGeometry = new THREE.BufferGeometry();
             const lineMaterial = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 1, transparent: true });
             const line = new THREE.Line(lineGeometry, lineMaterial);
             asteroid.userData.line = line;
             asteroid.userData.positions = [];
-            
+
             solarSystem.add(asteroid);
             solarSystem.add(line);
             asteroids.push(asteroid);
@@ -230,7 +230,7 @@
                     planet.position.x = Math.cos(angle) * distance;
                     planet.position.z = Math.sin(angle) * distance;
                 }
-                
+
                 // ラベルが常にカメラの方を向くように調整
                 planet.children[0].lookAt(camera.position);
             });
