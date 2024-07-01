@@ -44,6 +44,10 @@
 
     const ECCENTRICITY = 0.1; // 楕円軌道の離心率
 
+    // 既存の変数宣言に以下を追加
+    let galacticGrid;
+    const GALACTIC_MOVEMENT_SPEED = 0.01;
+
     function init() {
         scene = new THREE.Scene();
         camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -58,11 +62,21 @@
         createDynamicStarryBackground();
         createSolarSystem();
         createGrid();
+        createGalacticGrid(); // 新しく追加
         createGUI();
 
         window.addEventListener('resize', onWindowResize, false);
 
         animate();
+    }
+
+    // 新しく追加する関数
+    function createGalacticGrid() {
+        const size = 1000;
+        const divisions = 50;
+        galacticGrid = new THREE.GridHelper(size, divisions, 0x888888, 0x444444);
+        galacticGrid.position.y = -100; // グリッドを少し下げる
+        scene.add(galacticGrid);
     }
 
     function addLighting() {
@@ -276,8 +290,22 @@
 
         const time = Date.now() * 0.001;
 
+        // 太陽系全体の銀河系内での動き
+        solarSystem.position.x += Math.sin(time * GALACTIC_MOVEMENT_SPEED) * 0.1;
+        solarSystem.position.z += Math.cos(time * GALACTIC_MOVEMENT_SPEED) * 0.1;
+
+        // グリッドの動き（太陽系の動きと逆方向）
+        galacticGrid.position.x -= Math.sin(time * GALACTIC_MOVEMENT_SPEED) * 0.1;
+        galacticGrid.position.z -= Math.cos(time * GALACTIC_MOVEMENT_SPEED) * 0.1;
+
+        // 背景の星の動き
+        starField.rotation.y += 0.0001;
+        starField.position.x -= Math.sin(time * GALACTIC_MOVEMENT_SPEED) * 0.05;
+        starField.position.z -= Math.cos(time * GALACTIC_MOVEMENT_SPEED) * 0.05;
+
+        // 惑星の動き
         planets.forEach((planet, index) => {
-            if (index > 0) {
+            if (index > 0) {  // 太陽以外の惑星
                 const orbitalPeriod = Math.sqrt(Math.pow(planet.userData.semiMajorAxis, 3)) * 0.1;
                 const angle = time / orbitalPeriod;
                 const semiMinorAxis = planet.userData.semiMajorAxis * Math.sqrt(1 - ECCENTRICITY * ECCENTRICITY);
@@ -285,14 +313,11 @@
                 planet.position.z = semiMinorAxis * Math.sin(angle);
             }
 
+            // 惑星ラベルがカメラの方を向くように調整
             planet.children[0].lookAt(camera.position);
         });
 
-        solarSystem.position.x = Math.sin(time * SOLAR_SYSTEM_MOVE_SPEED) * 20;
-        solarSystem.position.y = Math.cos(time * SOLAR_SYSTEM_MOVE_SPEED * 2) * 10;
-        solarSystem.position.z = Math.cos(time * SOLAR_SYSTEM_MOVE_SPEED) * 20;
-
-            // カメラの動き
+        // カメラの動き
         cameraAngle += 0.001;
         cameraDistance = 50 + Math.sin(time * 0.2) * 20;
         const cameraHeight = 30 + Math.cos(time * 0.3) * 10;
@@ -300,16 +325,13 @@
         camera.position.z = Math.sin(cameraAngle) * cameraDistance + solarSystem.position.z;
         camera.position.y = Math.sin(cameraAngle * 0.5) * 20 + cameraHeight + solarSystem.position.y;
 
-            // 地球にフォーカス
+        // カメラが地球を注視するように設定
         const earth = planets[3];
         const earthWorldPosition = new THREE.Vector3();
         earth.getWorldPosition(earthWorldPosition);
         camera.lookAt(earthWorldPosition);
 
-        // 星空の緩やかな回転
-        starField.rotation.y = time * 0.00005;
-        starField.rotation.x = time * 0.00003;
-
+        // アステロイドの生成と更新
         if (Math.random() < 0.02) createAsteroid();
         updateAsteroids();
 
