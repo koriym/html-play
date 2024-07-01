@@ -155,7 +155,28 @@
                 orbit.rotation.x = Math.PI / 2;
                 solarSystem.add(orbit);
             }
+
+            const label = createTextSprite(data.name);
+            label.position.set(0, data.radius + 0.5, 0);
+            planet.add(label);
         });
+    }
+
+    function createTextSprite(text) {
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        context.font = 'Bold 20px Arial';
+        context.fillStyle = 'white';
+        context.fillText(text, 0, 20);
+
+        const texture = new THREE.Texture(canvas);
+        texture.needsUpdate = true;
+
+        const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+        const sprite = new THREE.Sprite(spriteMaterial);
+        sprite.scale.set(2, 1, 1);
+
+        return sprite;
     }
 
     function createGrid() {
