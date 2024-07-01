@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Milky Way Galaxy Visualization</title>
+    <style>
+        body { margin: 0; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Create the scene
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000000);
+
+        // Create the camera
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 150, 80);
+        camera.lookAt(0, 0, 0);
+
+        // Create the renderer
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Create stars
+        const starGeometry = new THREE.BufferGeometry();
+        const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.1 });
+
+        // Create an array to hold the star positions
+        const starPositions = [];
+
+        // Function to generate random positions within a disc with arms
+        function generateArmPositions(armData, count, offsetX = 0, offsetY = 0, offsetZ = 0) {
+            for (let i = 0; i < count; i++) {
+                const { radius, spread, twist } = armData;
+                const r = radius * Math.sqrt(Math.random());
+                const theta = Math.random() * 2 * Math.PI;
+                const spiralFactor = r * twist;
+                const x = r * Math.cos(theta + spiralFactor) + offsetX + (Math.random() - 0.5) * spread;
+                const y = (Math.random() - 0.5) * 2 + offsetY;
+                const z = r * Math.sin(theta + spiralFactor) + offsetZ + (Math.random() - 0.5) * spread;
+                starPositions.push(x, y, z);
+            }
+        }
+
+        // Define arm data
+        const arms = [
+            { radius: 100, spread: 20, twist: 0.3 }, // Perseus Arm
+            { radius: 80, spread: 18, twist: 0.4 },  // Sagittarius Arm
+            { radius: 60, spread: 6, twist: 0.5 },  // Norma Arm
+            { radius: 40, spread: 5, twist: 0.6 },  // Scutum-Crux Arm
+            { radius: 70, spread: 3, twist: 0.5 },  // Local Spur
+        ];
+
+        // Generate stars for the galaxy arms
+        arms.forEach(arm => generateArmPositions(arm, 100000));
+
+        // Generate stars for the galaxy bulge
+        generateArmPositions({ radius: 15, spread: 10, twist: 0.1 }, 20000, 0, 0, 0);
+
+        // Convert positions array to a Float32Array and set it to the star geometry
+        starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
+
+        // Create the star points and add them to the scene
+        const stars = new THREE.Points(starGeometry, starMaterial);
+        scene.add(stars);
+
+        // Add ambient light
+        const ambientLight = new THREE.AmbientLight(0x888888);
+        scene.add(ambientLight);
+
+        // Add point light to simulate the galaxy center
+        const pointLight = new THREE.PointLight(0xffffff, 1, 500);
+        pointLight.position.set(0, 0, 0);
+        scene.add(pointLight);
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Rotate the galaxy for better visualization
+            scene.rotation.y += 0.001;
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

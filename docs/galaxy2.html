@@ -1,0 +1,190 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Realistic Milky Way Galaxy Visualization</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; color: #fff; font-family: Arial, sans-serif; }
+        canvas { display: block; }
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 300px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .slider-container {
+            margin-bottom: 10px;
+        }
+        input[type="range"] {
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <div class="slider-container">
+            <label for="zoomSlider">Zoom: <span id="zoomValue"></span></label>
+            <input type="range" id="zoomSlider" min="50" max="500" value="117">
+        </div>
+        <div class="slider-container">
+            <label for="angleSlider">Angle: <span id="angleValue"></span></label>
+            <input type="range" id="angleSlider" min="0" max="90" value="23">
+        </div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+    // Galaxy parameters
+    const galaxyParams = {
+        arms: [
+            { a: 25, b: 0.15, startAngle: 0, endAngle: Math.PI * 2, starCount: 40000, color: 0xCCEEFF, rotationOffset: 0 },
+            { a: 25, b: 0.15, startAngle: 0, endAngle: Math.PI * 2, starCount: 35000, color: 0xFFDDDD, rotationOffset: Math.PI * 0.5 },
+            { a: 25, b: 0.15, startAngle: 0, endAngle: Math.PI * 1.8, starCount: 30000, color: 0xDDDDFF, rotationOffset: Math.PI },
+            { a: 25, b: 0.15, startAngle: 0, endAngle: Math.PI * 1.9, starCount: 32000, color: 0xDDFFDD, rotationOffset: Math.PI * 1.5 },
+        ],
+        bulge: {
+            radiusX: 30,
+            radiusY: 10,
+            radiusZ: 30,
+            starCount: 15000,
+            color: 0xFFFFFF
+        },
+        diskThicknessCenter: 0.1,
+        diskThicknessEdge: 0.01,
+        starSize: 0.01,
+        rotationSpeed: 0.0004
+    };
+
+    // Three.js setup
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x000000);
+
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // Create galaxy
+    function createGalaxy() {
+        const starGeometry = new THREE.BufferGeometry();
+        const starMaterial = new THREE.PointsMaterial({
+            size: galaxyParams.starSize,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.8,
+            blending: THREE.AdditiveBlending
+        });
+
+        const starPositions = [];
+        const starColors = [];
+
+        function generateSpiralArm(params) {
+            const { a, b, startAngle, endAngle, starCount, color, rotationOffset } = params;
+            for (let i = 0; i < starCount; i++) {
+                const t = startAngle + (endAngle - startAngle) * Math.pow(Math.random(), 0.5);
+                const r = a * Math.exp(b * t);
+                const angle = t + rotationOffset;
+
+                // Adjust width and density based on distance from center
+                const widthFactor = 0.1 + 0.9 * (r / (a * Math.exp(b * endAngle)));
+                const densityFactor = Math.exp(-r / (a * 2));
+
+                if (Math.random() > densityFactor) continue; // Skip some stars to reduce density at outer regions
+
+                const spreadDistance = Math.random() * widthFactor * 10;
+                const spreadAngle = Math.random() * Math.PI * 2;
+
+                const x = r * Math.cos(angle) + spreadDistance * Math.cos(spreadAngle);
+                const thickness = galaxyParams.diskThicknessCenter * Math.exp(-r / (a * 3)) + galaxyParams.diskThicknessEdge;
+                const y = (Math.random() - 0.5) * thickness * r;
+                const z = r * Math.sin(angle) + spreadDistance * Math.sin(spreadAngle);
+
+                starPositions.push(x, y, z);
+
+                const baseColor = new THREE.Color(color);
+                const mixColor = new THREE.Color(0xFFFFFF);
+                const finalColor = baseColor.lerp(mixColor, 0.2 + 0.8 * (r / (a * Math.exp(b * endAngle))));
+                starColors.push(finalColor.r, finalColor.g, finalColor.b);
+            }
+        }
+
+        galaxyParams.arms.forEach(arm => generateSpiralArm(arm));
+
+        // Generate stars for the galaxy bulge (unchanged)
+        for (let i = 0; i < galaxyParams.bulge.starCount; i++) {
+            const u = Math.random();
+            const v = Math.random();
+            const theta = 2 * Math.PI * u;
+            const phi = Math.acos(2 * v - 1);
+            const r = Math.cbrt(Math.random()) * galaxyParams.bulge.radiusX;
+
+            const x = r * Math.sin(phi) * Math.cos(theta);
+            const y = r * Math.sin(phi) * Math.sin(theta) * (galaxyParams.bulge.radiusY / galaxyParams.bulge.radiusX);
+            const z = r * Math.cos(phi);
+
+            starPositions.push(x, y, z);
+
+            const brightness = 0.9 + 0.1 * Math.random();
+            const bulgeColor = new THREE.Color(galaxyParams.bulge.color);
+            starColors.push(bulgeColor.r * brightness, bulgeColor.g * brightness, bulgeColor.b * brightness);
+        }
+
+        starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
+        starGeometry.setAttribute('color', new THREE.Float32BufferAttribute(starColors, 3));
+
+        return new THREE.Points(starGeometry, starMaterial);
+    }
+
+    const galaxy = createGalaxy();
+    scene.add(galaxy);
+
+    // Lighting setup (unchanged)
+    const ambientLight = new THREE.AmbientLight(0x222222);
+    scene.add(ambientLight);
+
+    const pointLight = new THREE.PointLight(0xFFFFFF, 5, 100);
+    pointLight.position.set(0, 0, 0);
+    scene.add(pointLight);
+
+    // Control setup (unchanged)
+    const zoomSlider = document.getElementById('zoomSlider');
+    const zoomValue = document.getElementById('zoomValue');
+    const angleSlider = document.getElementById('angleSlider');
+    const angleValue = document.getElementById('angleValue');
+
+    function updateCamera() {
+        const zoom = parseInt(zoomSlider.value);
+        const angle = parseInt(angleSlider.value);
+        const radians = angle * (Math.PI / 180);
+        camera.position.set(0, Math.sin(radians) * zoom, Math.cos(radians) * zoom);
+        camera.lookAt(0, 0, 0);
+        zoomValue.textContent = zoom;
+        angleValue.textContent = angle + "°";
+    }
+
+    zoomSlider.addEventListener('input', updateCamera);
+    angleSlider.addEventListener('input', updateCamera);
+
+    updateCamera(); // Initial camera setup
+
+    function animate() {
+        requestAnimationFrame(animate);
+        galaxy.rotation.y += galaxyParams.rotationSpeed;
+        renderer.render(scene, camera);
+    }
+
+    animate();
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+    </script>
+</body>
+</html>
