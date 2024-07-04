@@ -1,0 +1,292 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voyager 1 Swingby Simulator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.7/dat.gui.min.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            background-color: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+<div id="info">
+    Date: <span id="date"></span><br>
+    Voyager 1 Distance: <span id="distance"></span> AU
+</div>
+<script>
+    let scene, camera, renderer, planets = [], voyager, solarSystem;
+    let starField;
+    let simulationTime = 0;
+    const launchDate = new Date('1977-09-05');
+    const AU = 149597870.7; // 1天文単位（km）
+
+    const SCALE_FACTOR = 10;
+    let cameraDistance = 5;
+
+    const params = {
+        timeSpeed: 5,
+        launchVelocity: 45  , // km/s
+        launchAngle: 0.1 // degrees
+    };
+
+    function init() {
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(10, 5, 10);
+        camera.lookAt(0, 0, 0);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        addLighting();
+        createDynamicStarryBackground();
+        createSolarSystem();
+        createVoyager();
+        createConcentricCircles()
+        createGUI();
+
+        window.addEventListener('resize', onWindowResize, false);
+
+        animate();
+    }
+
+    function createConcentricCircles() {
+        const material = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.1 });
+
+        for (let i = 1; i <= 10; i++) {
+            const innerRadius = i * 0.1 - 0.05; // 0.1 AUごとに同心円を描く
+            const outerRadius = i * 0.1 + 0.05;
+            const geometry = new THREE.RingGeometry(innerRadius, outerRadius, 64);
+            const ring = new THREE.Mesh(geometry, material);
+            ring.rotation.x = Math.PI / 2;
+            solarSystem.add(ring);
+        }
+    }
+
+
+    function addLighting() {
+        const ambientLight = new THREE.AmbientLight(0x404040);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        directionalLight.position.set(1, 1, 1);
+        scene.add(directionalLight);
+    }
+
+    function createDynamicStarryBackground() {
+        const starsGeometry = new THREE.BufferGeometry();
+        const starsMaterial = new THREE.PointsMaterial({
+            color: 0xFFFFFF,
+            size: 0.1,
+            sizeAttenuation: true
+        });
+
+        const starsVertices = [];
+        const starColors = [];
+        for (let i = 0; i < 50000; i++) {
+            const x = (Math.random() - 0.5) * 2000;
+            const y = (Math.random() - 0.5) * 2000;
+            const z = (Math.random() - 0.5) * 2000;
+            starsVertices.push(x, y, z);
+
+            const r = Math.random();
+            const g = Math.random() * 0.7 + 0.3;
+            const b = Math.random();
+            starColors.push(r, g, b);
+        }
+
+        starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starsVertices, 3));
+        starsGeometry.setAttribute('color', new THREE.Float32BufferAttribute(starColors, 3));
+
+        starsMaterial.vertexColors = true;
+
+        starField = new THREE.Points(starsGeometry, starsMaterial);
+        scene.add(starField);
+    }
+
+    function createSolarSystem() {
+        solarSystem = new THREE.Group();
+        scene.add(solarSystem);
+
+        const planetData = [
+            { name: "Sun", radius: 5.46, distance: 0, color: 0xcc0000 },
+            { name: "Mercury", radius: 0.02, distance: 22.83, color: 0xaaaaaa },
+            { name: "Venus", radius: 0.05, distance: 42.264, color: 0xffcc00 },
+            { name: "Earth", radius: 0.05, distance: 58.7, color: 0x0077be },
+            { name: "Mars", radius: 0.03, distance: 89.224, color: 0xff0000 },
+            { name: "Jupiter", radius: 0.561, distance: 305.53, color: 0xffa500 },
+            { name: "Saturn", radius: 0.473, distance: 560.567, color: 0xffd700 },
+            { name: "Uranus", radius: 0.2, distance: 1128.214, color: 0x00ffff },
+            { name: "Neptune", radius: 0.19, distance: 1763.935, color: 0x0000ff }
+        ];
+
+        planetData.forEach(data => {
+            const geometry = new THREE.SphereGeometry(data.radius, 32, 32);
+            const material = new THREE.MeshPhongMaterial({ color: data.color });
+            const planet = new THREE.Mesh(geometry, material);
+            planet.position.x = data.distance;
+            planet.userData = { name: data.name, distance: data.distance };
+            solarSystem.add(planet);
+            planets.push(planet);
+
+            if (data.name !== "Sun") {
+                const orbitGeometry = new THREE.RingGeometry(data.distance - 0.1, data.distance + 0.1, 64);
+                const orbitMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.1 });
+                const orbit = new THREE.Mesh(orbitGeometry, orbitMaterial);
+                orbit.rotation.x = Math.PI / 2;
+                solarSystem.add(orbit);
+            }
+
+            const label = createTextSprite(data.name);
+            label.position.set(0, data.radius + 0.2, 0);
+            planet.add(label);
+        });
+    }
+
+    function createTextSprite(text) {
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        context.font = 'Bold 20px Arial';
+        context.fillStyle = 'white';
+        context.fillText(text, 0, 20);
+
+        const texture = new THREE.Texture(canvas);
+        texture.needsUpdate = true;
+
+        const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+        const sprite = new THREE.Sprite(spriteMaterial);
+        sprite.scale.set(1, 0.5, 1);
+
+        return sprite;
+    }
+
+    function createVoyager() {
+        const geometry = new THREE.ConeGeometry(0.05, 0.2, 8);
+        const material = new THREE.MeshPhongMaterial({ color: 0xcccccc });
+        voyager = new THREE.Mesh(geometry, material);
+        voyager.rotation.x = Math.PI / 2;
+
+        // ボイジャーの初期位置を地球の位置に設定
+        const earthPosition = getEarthPosition();
+        voyager.position.copy(earthPosition);
+
+        solarSystem.add(voyager);
+
+        const label = createTextSprite("Voyager 1");
+        label.position.set(0, 0.2, 0);
+        voyager.add(label);
+    }
+    function getEarthPosition() {
+        // 地球オブジェクトを検索
+        const earth = planets.find(planet => planet.userData.name === "Earth");
+
+        // 地球の位置を取得
+        const earthPosition = earth.position;
+
+        return earthPosition;
+    }
+    let voyagerVelocity = new THREE.Vector3();
+
+    function updateVoyagerPosition(deltaTime) {
+        // 初期速度の設定（初回のみ）
+        if (voyagerVelocity.length() === 0) {
+            const launchAngleRad = params.launchAngle * Math.PI / 180;
+            const velocityScaleFactor = 0.01;
+            voyagerVelocity.set(
+                Math.cos(launchAngleRad) * params.launchVelocity * velocityScaleFactor,
+                Math.sin(launchAngleRad) * params.launchVelocity * velocityScaleFactor,
+                0
+            );
+        }
+
+        // 重力の影響を計算
+        const acceleration = new THREE.Vector3(0, 0, 0);
+        planets.forEach(planet => {
+            if (planet.userData.name === "Jupiter" || planet.userData.name === "Saturn") {
+                const distanceVector = new THREE.Vector3().subVectors(planet.position, voyager.position);
+                const distance = distanceVector.length();
+                const gravityForce = 0.1 / (distance * distance);
+                const gravityDirection = distanceVector.normalize();
+                acceleration.add(gravityDirection.multiplyScalar(gravityForce));
+            }
+        });
+
+        // 速度の更新
+        voyagerVelocity.add(acceleration.multiplyScalar(deltaTime));
+
+        // 位置の更新
+        voyager.position.add(voyagerVelocity.clone().multiplyScalar(deltaTime));
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+
+        const deltaTime = params.timeSpeed / 60;
+        simulationTime += deltaTime;
+
+        const date = new Date(launchDate.getTime() + simulationTime * 24 * 60 * 60 * 1000);
+        document.getElementById("date").textContent = date.toISOString().split('T')[0];
+
+        const distance = voyager.position.length() * AU / 1e6;
+        // document.getElementById("distance").textContent = distance.toFixed(2) ;
+        document.getElementById("distance").textContent = "n/a";
+
+        updateVoyagerPosition(deltaTime);
+
+        planets.forEach((planet, index) => {
+            if (index > 0) {
+                const orbitalPeriod = Math.sqrt(Math.pow(planet.userData.distance, 3));
+                const angle = simulationTime / (orbitalPeriod * 365.25) * 2 * Math.PI;
+                planet.position.x = Math.cos(angle) * planet.userData.distance;
+                planet.position.z = Math.sin(angle) * planet.userData.distance;
+            }
+            planet.children[0].lookAt(camera.position);
+        });
+
+        // カメラをボイジャーに追従
+        const cameraOffset = new THREE.Vector3(
+            Math.cos(simulationTime * 0.005) * cameraDistance,
+            Math.sin(simulationTime * 0.0025) * cameraDistance * 0.5,
+            Math.sin(simulationTime * 0.005) * cameraDistance
+        );
+        camera.position.copy(voyager.position).add(cameraOffset);
+        camera.lookAt(voyager.position);
+
+        starField.rotation.y = simulationTime * 0.00001;
+        starField.rotation.x = simulationTime * 0.000005;
+
+        renderer.render(scene, camera);
+    }
+
+    function createGUI() {
+        const gui = new dat.GUI();
+        gui.add(params, 'timeSpeed', 0, 150).name('Time Speed');
+        gui.add(params, 'launchVelocity', 10, 20).name('Launch Velocity (km/s)');
+        gui.add(params, 'launchAngle', 0, 90).name('Launch Angle (degrees)');
+    }
+
+    function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    init();
+</script>
+</body>
+</html>
